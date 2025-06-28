@@ -1,3 +1,29 @@
+# Assets
 .idea
 assets/demos
 assets/output
+
+# Hydrus
+Hydrus/.vscode
+Hydrus/logs
+*.log
+Hydrus/npm-debug.log*
+Hydrus/yarn-debug.log*
+Hydrus/yarn-error.log*
+Hydrus/pnpm-debug.log*
+Hydrus/lerna-debug.log*
+
+Hydrus/node_modules
+Hydrus/dist
+Hydrus/dist-ssr
+*.local
+
+Hydrus/.vscode/*
+Hydrus/!.vscode/extensions.json
+Hydrus/.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
