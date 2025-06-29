@@ -1,11 +1,14 @@
 from traceback import print_exc
-import concurrent.futures
 import pandas as pd
 from demoparser2 import DemoParser
 import os
 import shutil
 import uuid
 import random
+from dotenv import find_dotenv, load_dotenv
+
+dotenv_path = find_dotenv()
+load_dotenv(dotenv_path)
 
 def clear_voices_directory():
     voices_dir = "../assets/output/voices"
@@ -40,7 +43,6 @@ class DemoProcessor:
     def get_player_teams(self):
         try:
             parser = process_demo(self.demo_path)
-            parser.parse_header()
             players = parser.parse_player_info()
             teams = players['team_number'].unique()
             team1 = extract_team_data(players, teams[0])
@@ -57,7 +59,6 @@ class DemoProcessor:
             print(f"Invalid Steam ID: {steam_id}. Steam ID must be an integer.")
         try:
             parser = process_demo(self.demo_path)
-            parser.parse_header()
             players = parser.parse_player_info()
             player_row = players.loc[players['steamid'] == steam_id]
             return player_row['name'].values[0] if not player_row.empty else "Unknown Player"
@@ -68,20 +69,37 @@ class DemoProcessor:
     def get_round_end_ticks(self):
         try:
             parser = process_demo(self.demo_path)
-            parser.parse_header()
-            game_end_ticks = parser.parse_event("round_end")["tick"]
+            round_end_ticks = parser.parse_event("round_end")["tick"]
             # Return a list of round end ticks
-            tick_list = list(game_end_ticks)
+            tick_list = list(round_end_ticks)
             print(f"Round end ticks: {tick_list}")
             return tick_list
         except Exception as e:
             print(f"An error occurred while getting round end ticks: {e}")
             return []
+        
+    def get_round_start_ticks(self):
+        try:
+            parser = process_demo(self.demo_path)
+            print(f"game events: {parser.list_game_events()}")
+            round_start_ticks = parser.parse_event("round_start")["tick"]
+            # subtract 100 from every item in round_start_ticks
+            # Filter out ticks that are not at least 500 greater than the previous tick
+            filtered_ticks = []
+            for tick in round_start_ticks:
+                if not filtered_ticks or tick - filtered_ticks[-1] > 500:
+                    filtered_ticks.append(tick)
+            # Return a list of round end ticks
+            tick_list = filtered_ticks
+            print(f"Round start ticks: {tick_list}")
+            return tick_list
+        except Exception as e:
+            print(f"An error occurred while getting round start ticks: {e}")
+            return []
 
     def process_voices_by_team(self):
         try:
             parser = process_demo(self.demo_path)
-            parser.parse_header()
             streamed_bytes = parser.parse_voice()
             team1, team2 = self.get_player_teams()
             team1_steam_ids = [player['steamid'] for player in team1]
@@ -111,7 +129,6 @@ class DemoProcessor:
     def get_start_time(self):
         try:
             parser = process_demo(self.demo_path)
-            parser.parse_header()
             return parser.parse_event("round_start").get("time", None)
         except Exception as e:
             print(f"An error occurred while getting start time: {e}")
@@ -121,9 +138,6 @@ class DemoProcessor:
     def get_game_leaderboard_every_round(self, round):
         try:
             parser = process_demo(self.demo_path)
-            parser.parse_header()
-            game_events = parser.list_game_events()
-            print(f"Game events: {game_events}")
             round_end_ticks = self.get_round_end_ticks()
             print(f"Game end tick: {round_end_ticks[round]}")
             wanted_fields = ["kills_total", "deaths_total","assists_total",  "mvps"]
@@ -132,15 +146,54 @@ class DemoProcessor:
         except Exception as e:
             print(f"An error occurred while getting player positions at round {round + 1}: {e}")
             return None
-    def get_player_stats(self, tick):
-        raise NotImplementedError("get_player_stats method is not implemented yet.")
+        
+    # Return a list of all ticks between the start and end of a specified round
+    def get_ticks_between_rounds(self, round):
+        try:
+            round_start_ticks = self.get_round_start_ticks()
+            print(len(round_start_ticks))
+            round_end_ticks = self.get_round_end_ticks()
+            print(len(round_end_ticks))
+            if (len(round_start_ticks) != len(round_end_ticks)):
+                raise ValueError("Round start and end ticks lists must be of the same length.")
+            
+            # Get Round_Start_Ticks[round] and Round_End_Ticks[round]
+            # Return every tick between these two ticks
+            if round < 0 or round >= len(round_start_ticks) or round >= len(round_end_ticks):
+                raise IndexError("Round index out of range.")
+            start_tick = round_start_ticks[round]
+            end_tick = round_end_ticks[round]
+            if start_tick is None or end_tick is None:
+                raise ValueError("Start or end tick is None.")
+            if start_tick >= end_tick:
+                raise ValueError("Start tick must be less than end tick.")
+            ticks = list(range(start_tick, end_tick + 1))
+            return ticks
+        except Exception as e:
+            print(f"An error occurred while getting the ticks between rounds: {e}")
+            return None
+    
 
+    def get_player_movement_in_round(self, round):
+        try:
+            parser = process_demo(self.demo_path)
+            round_ticks = self.get_ticks_between_rounds(round)
+            position_fields = ["X", "Y", "Z"]
+            df = parser.parse_ticks(position_fields, ticks=round_ticks)
+            print(df)
+        except Exception as e:
+            print(f"An error occurred while getting player positions at round {round + 1}: {e}")
+            return None
 
 if __name__ == "__main__":
     print("Demos processing...")
-    dp = DemoProcessor("../assets/demos/nuke.dem")
+
+    PATH = os.getenv("DEMO_PATH")
+    dp = DemoProcessor(PATH)
     seed = 0
     rd = random.Random()
     rd.seed(seed)
     dp.set_demo_id(uuid.UUID(int=rd.getrandbits(128)))
-    dp.get_game_leaderboard_every_round(1)
+    # dp.get_relevant_ticks_every_round(0)
+    dp.get_player_movement_in_round(2)
+    dp.get_game_leaderboard_every_round(12)

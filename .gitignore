@@ -21,9 +21,14 @@ Hydrus/dist-ssr
 Hydrus/.vscode/*
 Hydrus/!.vscode/extensions.json
 Hydrus/.idea
+
+
 .DS_Store
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
+
+# Dotenv configuration
+.env
